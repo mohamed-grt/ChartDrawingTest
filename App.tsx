@@ -1,117 +1,143 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
 import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
-
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
-
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
-
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
+import {SafeAreaView, StyleSheet} from 'react-native';
+import WebView from 'react-native-webview';
 
 function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+  const data = {
+    name: 'Root',
+    children: [
+      {
+        name: 'Child 1',
+        children: [{name: 'Grandchild 1'}],
+      },
+      {
+        name: 'Child 2',
+        children: [{name: 'Grandchild 2'}, {name: 'Grandchild 3'}],
+      },
+    ],
   };
 
+  const htmlContent: string = `
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>VisX Tree</title>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <style>
+      body { margin: 0; padding: 0; }
+      svg { width: 100%; height: 100vh; }
+    </style>
+  </head>
+  <body>
+    <svg></svg>
+    <p id="demo"></p>
+
+    <script>
+      const data = ${JSON.stringify(data)};
+
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+
+      const rectWidth = 100; 
+      const rectHeight = 50; 
+
+      const root = d3.hierarchy(data);
+      const treeLayout = d3.tree().size([width, height - 40]);
+      treeLayout(root);
+
+      const svg = d3.select("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .append("g")
+        .attr("transform", "translate(20,20)");
+
+      // Step-style links
+      //Draw shared connectors for parents
+      svg.selectAll('g.connector')
+        .data(root.descendants().filter(d => d.children))
+        .enter()
+        .append('g')
+        .attr('class', 'connector')
+        .each(function(d) {
+          const g = d3.select(this);
+          const children = d.children;
+      
+          const minX = d3.min(children, c => c.x);
+          const maxX = d3.max(children, c => c.x);
+          const midY = d.y + (children[0].y - d.y) / 2; // halfway down to children
+      
+          // Vertical line from parent to midY
+          g.append('path')
+            .attr('fill', 'none')
+            .attr('stroke', 'black')
+            .attr('stroke-width', 1.5)
+            .attr('d', \`M\${d.x},\${d.y} V\${midY}\`);
+      
+          // Horizontal bus line connecting all children x at midY
+          g.append('path')
+            .attr('fill', 'none')
+            .attr('stroke', 'black')
+            .attr('stroke-width', 1.5)
+            .attr('d', \`M\${minX},\${midY} H\${maxX}\`);
+      
+          // Vertical drop lines to each child
+          children.forEach(c => {
+            g.append('path')
+              .attr('fill', 'none')
+              .attr('stroke', 'black')
+              .attr('stroke-width', 1.5)
+              .attr('d', \`M\${c.x},\${midY} V\${c.y}\`);
+            });
+          });
+
+      // Nodes (rectangles)
+      svg.selectAll('rect')
+        .data(root.descendants())
+        .enter()
+        .append('rect')
+        .attr('x', d => d.x - rectWidth / 2)
+        .attr('y', d => d.y - rectHeight / 2)
+        .attr('width', rectWidth)
+        .attr('height', rectHeight)
+        .attr('fill', 'steelblue');
+
+      // Labels
+      svg.selectAll('text')
+        .data(root.descendants())
+        .enter()
+        .append('text')
+        .attr('x', d => d.x - rectWidth / 2 + 5)
+        .attr('y', d => d.y + 5)
+        .attr('fill', 'white')
+        .text(d => d.data.name);
+
+     
+    </script>
+
+
+  </body>
+  </html>
+`;
+
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
+    <SafeAreaView style={styles.container}>
+      <WebView
+        originWhitelist={['*']}
+        source={{html: htmlContent}}
+        style={styles.webView}
       />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  container: {
+    flex: 1,
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
+  webView: {
+    flex: 1,
   },
 });
 
