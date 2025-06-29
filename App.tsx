@@ -1,6 +1,6 @@
 import React from 'react';
 import {SafeAreaView, StyleSheet} from 'react-native';
-import WebView from 'react-native-webview';
+import WebView, {WebViewMessageEvent} from 'react-native-webview';
 
 function App(): React.JSX.Element {
   const data = {
@@ -29,9 +29,25 @@ function App(): React.JSX.Element {
       body { margin: 0; padding: 0;}
       svg { width: 100%; height: 100vh; }
     </style>
+
+        <script>
+      // Override console methods to forward to React Native
+      (function () {
+        const sendLog = (type, args) => {
+          window.ReactNativeWebView?.postMessage(JSON.stringify({ type, message: args }));
+        };
+
+        ['log', 'warn', 'error', 'info'].forEach((level) => {
+          const original = console[level];
+          console[level] = function (...args) {
+            original.apply(console, args);
+            sendLog(level, args);
+          };
+        });
+      })();
+    </script>
   </head>
   <body>
-  <p id="demo">Hello</p>
     <svg></svg>
 
     <script>
@@ -57,12 +73,33 @@ function App(): React.JSX.Element {
         const g = svg.append("g")
           .attr("transform", "translate(100,50)");
 
+
+        // 🔍 Compute tree bounding box (dynamically)
+        const nodes = root.descendants();
+        const xValues = nodes.map(d => d.x);
+        const yValues = nodes.map(d => d.y);
+
+        const xMin = d3.min(xValues);
+        const xMax = d3.max(xValues);
+        const yMin = d3.min(yValues);
+        const yMax = d3.max(yValues);
+
+        // Add margins if desired
+        const margin = 200;
+
+        const extent = [
+          [xMin - margin, yMin - margin],
+          [xMax + margin, yMax + margin]
+        ];
+
+         console.log("Bounding Box:", extent);
+
         // Zoom setup - apply to the svg but transform the g element
         svg.call(d3.zoom()
           .scaleExtent([0.3, 2])
+          .translateExtent(extent)
           .on("zoom", (event) => {
-            document.getElementById("demo").innerHTML = "Zooming > " + event.transform.toString();
-            g.attr("transform", "translate(100,50) " + event.transform.toString());
+            g.attr("transform", "translate(0,0) " + event.transform.toString());
           }));
 
         // Rest of your visualization code (connectors, rects, text) goes here
@@ -131,6 +168,17 @@ function App(): React.JSX.Element {
   </html>
 `;
 
+  const handleMessage = (event: WebViewMessageEvent) => {
+    const message = event.nativeEvent.data;
+    try {
+      const parsedMessage = JSON.parse(message);
+      if (parsedMessage.type === 'log') {
+        console.log('📩 WebView:', ...parsedMessage.message);
+      }
+    } catch (error) {
+      console.error('Error parsing message from WebView:', error);
+    }
+  };
   return (
     <SafeAreaView style={styles.container}>
       <WebView
@@ -140,6 +188,7 @@ function App(): React.JSX.Element {
         style={styles.webView}
         overScrollMode="never"
         nestedScrollEnabled={false}
+        onMessage={handleMessage}
       />
     </SafeAreaView>
   );
